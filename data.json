@@ -1,0 +1,22 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "password": "$2a$10$X7E70wA0W9UByI6A7.WvUu6z9N4W7B7e8KzG.uG7w1XbHw7uBDeF2"
+    }
+  ],
+  "buku": [
+    {
+      "id": 1,
+      "judul": "Laskar Pelangi",
+      "penulis": "Andrea Hirata",
+      "dipinjam": false
+    },
+    {
+      "id": 2,
+      "judul": "Bumi",
+      "penulis": "Tere Liye",
+      "dipinjam": true
+    }
+  ]
+}
