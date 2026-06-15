@@ -38,6 +38,12 @@
 
         // 1. Cek Status Login
         async function cekStatusAuth() {
+            // Jika dibuka di GitHub Pages, abaikan pengecekan session auth backend
+            if (window.location.hostname.includes('github.io')) {
+                fetchBuku();
+                return;
+            }
+
             try {
                 const res = await fetch('/api/auth/status');
                 const data = await res.json();
@@ -53,7 +59,6 @@
                             <button id="btnLogout" style="background-color: #e74c3c;">Logout</button>
                         </div>
                     `;
-                    // Pasang event listener ke tombol logout yang baru dibuat
                     document.getElementById('btnLogout').addEventListener('click', logout);
                 } else {
                     userLoggedIn = false;
@@ -66,7 +71,6 @@
                             <button type="submit" style="background-color: #2ecc71;">Login</button>
                         </form>
                     `;
-                    // Pasang ulang event listener ke form login yang baru dibuat
                     document.getElementById('loginForm').addEventListener('submit', login);
                 }
             } catch (err) {
@@ -108,38 +112,58 @@
             cekStatusAuth();
         }
 
-        // 4. Ambil Daftar Buku
+        // 4. Ambil Daftar Buku (Mendukung Deteksi Otomatis Localhost vs GitHub Pages)
         async function fetchBuku() {
+            const cardDaftarBuku = document.getElementById('daftarBuku');
+            const isGitHubPages = window.location.hostname.includes('github.io');
+
+            // Skenario A: Jika dibuka lewat link GitHub Pages Online (Tampilkan data dummy cadangan)
+            if (isGitHubPages) {
+                const bukuDummy = [
+                    { id: 1, judul: "Laskar Pelangi (Demo)", penulis: "Andrea Hirata", dipinjam: false },
+                    { id: 2, judul: "Bumi (Demo)", penulis: "Tere Liye", dipinjam: true },
+                    { id: 3, judul: "Negeri 5 Menara (Demo)", penulis: "Ahmad Fuadi", dipinjam: false }
+                ];
+                tampilkanBukuKeLayar(bukuDummy);
+                return; 
+            }
+
+            // Skenario B: Jika dibuka di Localhost (Ambil data real-time dari MySQL)
             try {
                 const res = await fetch('/api/buku');
                 const buku = await res.json();
-                const cardDaftarBuku = document.getElementById('daftarBuku');
-                
-                cardDaftarBuku.innerHTML = '';
-
-                if (buku.length === 0) {
-                    cardDaftarBuku.innerHTML = '<p style="color:#7f8c8d;">Belum ada koleksi buku.</p>';
-                    return;
-                }
-
-                buku.forEach(b => {
-                    const item = document.createElement('div');
-                    item.className = `buku-card ${b.dipinjam ? 'dipinjam' : ''}`;
-                    
-                    const tombolAksi = userLoggedIn 
-                        ? `<button onclick="toggleStatus(${b.id})">${b.dipinjam ? 'Kembalikan' : 'Pinjam Buku'}</button>`
-                        : `<p style="font-size:12px; color:#95a5a6; font-style: italic;">Lakukan login untuk pinjam/kembalikan</p>`;
-
-                    item.innerHTML = `
-                        <h4>${b.judul}</h4>
-                        <p>Oleh: ${b.penulis}</p>
-                        ${tombolAksi}
-                    `;
-                    cardDaftarBuku.appendChild(item);
-                });
+                tampilkanBukuKeLayar(buku);
             } catch (err) {
                 console.error("Gagal memuat buku:", err);
+                cardDaftarBuku.innerHTML = '<p style="color:#e74c3c;">Gagal terhubung ke database MySQL lokal.</p>';
             }
+        }
+
+        // Fungsi Pembantu Render Kartu Buku ke Layar
+        function tampilkanBukuKeLayar(daftarBuku) {
+            const cardDaftarBuku = document.getElementById('daftarBuku');
+            cardDaftarBuku.innerHTML = '';
+
+            if (daftarBuku.length === 0) {
+                cardDaftarBuku.innerHTML = '<p style="color:#7f8c8d;">Belum ada koleksi buku.</p>';
+                return;
+            }
+
+            daftarBuku.forEach(b => {
+                const item = document.createElement('div');
+                item.className = `buku-card ${b.dipinjam ? 'dipinjam' : ''}`;
+                
+                const tombolAksi = userLoggedIn 
+                    ? `<button onclick="toggleStatus(${b.id})">${b.dipinjam ? 'Kembalikan' : 'Pinjam Buku'}</button>`
+                    : `<p style="font-size:12px; color:#95a5a6; font-style: italic;">Fitur database dinamis aktif di Localhost</p>`;
+
+                item.innerHTML = `
+                    <h4>${b.judul}</h4>
+                    <p>Oleh: ${b.penulis}</p>
+                    ${tombolAksi}
+                `;
+                cardDaftarBuku.appendChild(item);
+            });
         }
 
         // 5. Tambah Buku Baru
@@ -148,25 +172,33 @@
             const judul = document.getElementById('judul').value;
             const penulis = document.getElementById('penulis').value;
 
-            const res = await fetch('/api/buku', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ judul, penulis })
-            });
+            try {
+                const res = await fetch('/api/buku', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ judul, penulis })
+                });
 
-            if(res.ok) {
-                document.getElementById('formBuku').reset();
-                fetchBuku();
-            } else {
-                const data = await res.json();
-                alert(data.message);
+                if(res.ok) {
+                    document.getElementById('formBuku').reset();
+                    fetchBuku();
+                } else {
+                    const data = await res.json();
+                    alert(data.message);
+                }
+            } catch (error) {
+                alert("Gagal terhubung ke server untuk menambah buku.");
             }
         });
 
         // 6. Ubah Status Pinjam
         async function toggleStatus(id) {
-            await fetch(`/api/buku/${id}/status`, { method: 'PATCH' });
-            fetchBuku();
+            try {
+                await fetch(`/api/buku/${id}/status`, { method: 'PATCH' });
+                fetchBuku();
+            } catch (error) {
+                console.error("Gagal mengubah status buku:", error);
+            }
         }
 
         // Jalankan otomatis saat halaman dimuat
